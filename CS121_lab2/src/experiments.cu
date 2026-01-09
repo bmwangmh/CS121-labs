@@ -16,29 +16,25 @@ void experiment1(int numHashes) {
 void experiment2(int numHashes) {
     printf("\n=== Exp2: Lookup with varying hit rates, %d hash functions ===\n", numHashes);
     
-    uint32_t numKeys = 1U << 24;  // 2^24 keys
+    uint32_t numKeys = 1U << 24;
     uint32_t tableSize = 1U << 25;
     uint32_t maxEvict = (uint32_t)(4 * log2(numKeys));
     
     printf("Pre-generating valid key set of %u keys...\n", numKeys);
     
-    // Allocate host keys array
     uint32_t* h_keys = (uint32_t*)malloc(numKeys * sizeof(uint32_t));
     generateRandomKeys(h_keys, numKeys);
     
-    // Iteratively build a valid key set
     int iteration = 0;
     bool allInserted = false;
     
     while (!allInserted) {
         iteration++;
         
-        // Upload current keys to GPU
         uint32_t* d_keys = allocAndUploadKeys(h_keys, numKeys);
         
-        // Try to insert all keys
         CuckooHashTable ht(tableSize, numHashes, maxEvict);
-        bool success = ht.insert(d_keys, numKeys, 1);  // Only 1 attempt, no rehash
+        bool success = ht.insert(d_keys, numKeys, 1);
         
         if (success) {
             allInserted = true;
@@ -47,7 +43,6 @@ void experiment2(int numHashes) {
             break;
         }
         
-        // Lookup to find which keys were successfully inserted
         int* d_results;
         CUDA_CHECK(cudaMalloc(&d_results, numKeys * sizeof(int)));
         ht.lookup(d_keys, d_results, numKeys);
@@ -55,12 +50,11 @@ void experiment2(int numHashes) {
         int* h_results = (int*)malloc(numKeys * sizeof(int));
         CUDA_CHECK(cudaMemcpy(h_results, d_results, numKeys * sizeof(int), cudaMemcpyDeviceToHost));
         
-        // Count and collect failed keys, replace them with new keys
         uint32_t failedCount = 0;
         for (uint32_t i = 0; i < numKeys; i++) {
-            if (h_results[i] == 0) {  // Key not found = failed to insert
+            if (h_results[i] == 0) {
                 failedCount++;
-                // Generate a new random key to replace the failed one
+                
                 uint32_t newKey;
                 do {
                     newKey = rand() ^ ((uint32_t)rand() << 16);
@@ -82,7 +76,6 @@ void experiment2(int numHashes) {
         }
     }
     
-    // Now we have a valid set of keys, run the lookup benchmark
     uint32_t* d_keys = allocAndUploadKeys(h_keys, numKeys);
     CuckooHashTable ht(tableSize, numHashes, maxEvict);
     if (!ht.insert(d_keys, numKeys)) { 
@@ -131,7 +124,7 @@ void experiment4(int numHashes) {
     for (int i = 0; i < numMults; i++) {
         uint32_t maxEvict = multipliers[i] * logN;
         bool success;
-        // Use maxRestarts=1 so that trial ends as soon as a rehash would be triggered
+        
         double mops = benchmarkInsert(numKeys, tableSize, numHashes, maxEvict, 5, 1, &success);
         printf("%15u %15.2f %15s\n", maxEvict, mops, success ? "SUCCESS" : "REHASH");
     }

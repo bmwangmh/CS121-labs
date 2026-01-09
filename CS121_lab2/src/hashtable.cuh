@@ -3,11 +3,7 @@
 
 #include "common.cuh"
 
-// ============================================================================
-// Hash Functions - 使用不同的hash算法以减少相关性
-// ============================================================================
-
-// MurmurHash3 finalizer (完整版)
+// MurmurHash3 finalizer
 __device__ __host__ inline uint32_t murmur3_32(uint32_t key, uint32_t seed) {
     uint32_t h = seed;
     uint32_t k = key;
@@ -31,7 +27,7 @@ __device__ __host__ inline uint32_t murmur3_32(uint32_t key, uint32_t seed) {
     return h;
 }
 
-// xxHash32 风格的hash
+// xxHash32
 __device__ __host__ inline uint32_t xxhash32(uint32_t key, uint32_t seed) {
     const uint32_t PRIME1 = 0x9E3779B1U;
     const uint32_t PRIME2 = 0x85EBCA77U;
@@ -62,7 +58,6 @@ __device__ __host__ inline uint32_t fnv1a(uint32_t key, uint32_t seed) {
     return h;
 }
 
-// 根据hashIdx选择不同的hash函数
 __device__ inline uint32_t getHash(uint32_t key, uint32_t tableSize, uint32_t hashIdx,
                                    uint32_t numHashes, uint32_t* seeds) {
     uint32_t h;

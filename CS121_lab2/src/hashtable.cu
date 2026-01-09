@@ -19,41 +19,33 @@ __global__ void insertKernel(uint32_t* table, uint32_t* keys, uint32_t numKeys,
     
     uint32_t key = keys[idx];
     
-    // 随机数状态，用于打破对称性
     uint32_t randState = idx * 1099511628211ULL + clock64();
     
-    // 先检查key是否已存在
     for (uint32_t h = 0; h < numHashes; h++) {
         uint32_t loc = getHash(key, tableSize, h, numHashes, seeds);
         if (table[loc] == key) return;
     }
 
-    uint32_t curHashIdx = idx % numHashes;  // 不同线程从不同hash开始，减少冲突
+    uint32_t curHashIdx = idx % numHashes;
     
     for (uint32_t i = 0; i < maxEvict; i++) {
         uint32_t loc = getHash(key, tableSize, curHashIdx, numHashes, seeds);
         
-        // 优化：先用普通读检查是否为空，避免不必要的atomic操作
         uint32_t existing = table[loc];
         if (existing == EMPTY_KEY) {
-            // 位置为空，尝试CAS插入
             uint32_t prev = atomicCAS(&table[loc], EMPTY_KEY, key);
             if (prev == EMPTY_KEY || prev == key) return;
-            // CAS失败说明被其他线程抢占，继续驱逐逻辑
             existing = prev;
         }
         
-        if (existing == key) return;  // key已存在
+        if (existing == key) return;
         
-        // 位置被占用，执行驱逐
         uint32_t prev = atomicExch(&table[loc], key);
         
         if (prev == EMPTY_KEY || prev == key) return;
         
-        // 被驱逐，需要重新安置
         key = prev;
         
-        // 找到被驱逐key对应的hash索引
         bool foundSrc = false;
         for (uint32_t h = 0; h < numHashes; h++) {
             if (getHash(key, tableSize, h, numHashes, seeds) == loc) {
@@ -64,7 +56,6 @@ __global__ void insertKernel(uint32_t* table, uint32_t* keys, uint32_t numKeys,
         }
         
         if (!foundSrc) {
-            // 并发导致的异常情况，随机选择
             curHashIdx = deviceRand(randState) % numHashes;
         }
     }
